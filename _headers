@@ -1,0 +1,14 @@
+# Cloudflare Pages header rules.
+#
+# The app is one self-contained index.html that pulls Three.js + Astronomy Engine from a CDN at
+# runtime — there is no baked data file to cache hard. Keep the page itself on a short cache so a
+# redeploy reaches everyone quickly.
+
+/
+  Cache-Control: public, max-age=300
+
+/index.html
+  Cache-Control: public, max-age=300
+
+/favicon.svg
+  Cache-Control: public, max-age=86400

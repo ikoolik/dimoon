@@ -1,0 +1,998 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<title>Dimoon — Sun · Earth · Moon</title>
+<style>
+  :root {
+    --bg: #05070d;
+    --panel: rgba(16, 20, 30, 0.82);
+    --panel-border: rgba(120, 140, 180, 0.18);
+    --text: #e8ecf4;
+    --muted: #9aa6bd;
+    --accent: #ffcc66;
+    --accent2: #6db8ff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  .panel {
+    position: absolute; background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 12px; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.45);
+  }
+
+  /* ---- Left: controls ---- */
+  #controls { top: 14px; left: 14px; width: 268px; padding: 14px 16px 16px; }
+  #controls .sub { margin: 2px 0 12px; color: var(--muted); font-size: 11.5px; }
+
+  /* ---- Collapsible cards (shared) ---- */
+  .card-toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    width: 100%; margin: 0; padding: 0; background: none; border: 0; border-radius: 0;
+    color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+  .card-toggle:hover { background: none; }
+  .card-title { font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+  .caret { color: var(--muted); font-size: 12px; line-height: 1; transition: transform .18s ease; }
+  .panel.collapsed .caret { transform: rotate(-90deg); }
+  .panel.collapsed .card-body { display: none; }
+  .panel.collapsed { padding-bottom: 12px; }
+  #readout .card-body, #skycard .card-body { margin-top: 8px; }
+
+  .row { display: flex; align-items: center; gap: 8px; margin: 9px 0; }
+  .row label { flex: 0 0 74px; color: var(--muted); font-size: 11.5px; }
+  .row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .row .val { flex: 0 0 46px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  button {
+    background: rgba(90,110,150,0.16); color: var(--text); border: 1px solid var(--panel-border);
+    border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; transition: background .12s;
+  }
+  button:hover { background: rgba(120,150,200,0.28); }
+  button.active { background: var(--accent); color: #241a00; border-color: var(--accent); font-weight: 600; }
+
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin-top: 10px; }
+  .toggles label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; cursor: pointer; }
+  .toggles input { accent-color: var(--accent2); }
+
+  .sectlabel { margin: 14px 0 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); opacity:.8; }
+
+  #dt { flex: 1; min-width: 0; background: rgba(90,110,150,0.16); color: var(--text);
+    border: 1px solid var(--panel-border); border-radius: 8px; padding: 5px 8px; font: inherit; color-scheme: dark; }
+  .ecl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; font-size: 11px; color: var(--muted); }
+  .ecl-row button { padding: 3px 9px; font-size: 11px; flex: 0 0 auto; }
+  .ecl-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---- Right: readout ---- */
+  #readout { top: 14px; right: 14px; width: 230px; padding: 14px 16px; }
+  #readout .big { font-size: 20px; font-weight: 600; margin: 0; }
+  #readout .date { color: var(--muted); font-size: 11.5px; margin: 2px 0 12px; }
+  .stat { display: flex; justify-content: space-between; margin: 6px 0; }
+  .stat span:first-child { color: var(--muted); }
+  .stat span:last-child { font-variant-numeric: tabular-nums; }
+  #eclipse { margin-top: 12px; padding: 9px 10px; border-radius: 8px; font-size: 12px; text-align: center;
+    background: rgba(90,110,150,0.14); color: var(--muted); }
+  #eclipse.solar { background: rgba(255,150,60,0.22); color: #ffd9a8; border: 1px solid rgba(255,150,60,0.5); }
+  #eclipse.lunar { background: rgba(200,80,80,0.24); color: #ffc6c6; border: 1px solid rgba(200,80,80,0.55); }
+
+  /* Moon phase disc */
+  #phasedisc { display:block; margin: 4px auto 2px; }
+
+  /* ---- Sky-from-the-stick card (bottom-right) ---- */
+  #skycard { bottom: 14px; right: 14px; width: 200px; padding: 12px 16px 14px; }
+  #skydome { display: block; margin: 0 auto 8px; border-radius: 50%; }
+  .skystate { margin-top: 8px; padding: 6px 8px; border-radius: 7px; text-align: center; font-size: 12px;
+    background: rgba(90,110,150,0.14); color: var(--text); }
+
+  /* ---- Bottom hint ---- */
+  #hint { bottom: 12px; left: 50%; transform: translateX(-50%); padding: 7px 14px;
+    color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+
+  /* ---- Mobile transport bar (bottom, mobile-only) ---- */
+  #mobilebar { display: none; }
+  #mobilebar button { padding: 9px 12px; font-size: 15px; line-height: 1; }
+  #mobilebar .play { flex: 0 0 auto; min-width: 52px; text-align: center; }
+
+  @media (max-width: 720px) {
+    /* Controls live at the bottom (above the bar) and scroll if tall. */
+    #controls { top: auto; bottom: 66px; left: 14px; right: 14px; width: auto;
+      max-height: calc(100vh - 92px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+    /* Moon-phase and sky cards sit in the top corners, each half the width. */
+    #readout { top: 14px; left: 14px; right: auto; bottom: auto; width: calc(50vw - 21px); }
+    #skycard { top: 14px; right: 14px; bottom: auto; left: auto; width: calc(50vw - 21px); }
+    #phasedisc, #skydome { max-width: 100%; height: auto; }
+    #hint { display: none; }
+
+    #mobilebar { display: flex; align-items: center; justify-content: center; gap: 8px;
+      position: absolute; left: 14px; right: 14px; bottom: 14px;
+      padding: 8px 10px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="controls" class="panel collapsed">
+  <button class="card-toggle" aria-expanded="false" aria-controls="controlsBody">
+    <span class="card-title">Controls</span>
+    <span class="caret" aria-hidden="true">▾</span>
+  </button>
+  <div id="controlsBody" class="card-body">
+  <p class="sub">Sun · Earth · Moon — real dates, phases &amp; eclipses. Distances schematic.</p>
+
+  <div class="row" style="margin-top:2px;">
+    <label>Date (UTC)</label>
+    <input id="dt" type="datetime-local" />
+  </div>
+  <div class="btns" style="margin-top:8px;">
+    <button id="playBtn" class="active">⏸ Pause</button>
+    <button id="hourBack">−1h</button>
+    <button id="hourFwd">+1h</button>
+    <button id="stepBack">−1d</button>
+    <button id="stepFwd">+1d</button>
+    <button id="nowBtn">Now</button>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <label>Speed</label>
+    <input id="speed" type="range" min="0.041667" max="30" step="0.041667" value="0.041667" />
+    <span class="val" id="speedVal">1 h/s</span>
+  </div>
+
+  <div class="sectlabel">Camera</div>
+  <div class="btns">
+    <button id="camOverview">Overview</button>
+    <button id="camTop">Top-down</button>
+    <button id="camFollow" class="active">Follow Earth</button>
+    <button id="camEarth">From Earth</button>
+  </div>
+
+  <div class="sectlabel">Show</div>
+  <div class="toggles">
+    <label><input type="checkbox" id="tOrbits" checked> Orbit paths</label>
+    <label><input type="checkbox" id="tShadows" checked> Shadow cones</label>
+    <label><input type="checkbox" id="tLabels" checked> Labels</label>
+    <label><input type="checkbox" id="tStars" checked> Starfield</label>
+  </div>
+
+  <div class="sectlabel">Eclipses</div>
+  <div class="ecl-row"><span id="nextSolarTxt">Next solar: …</span><button id="goSolar">Go</button></div>
+  <div class="ecl-row"><span id="nextLunarTxt">Next lunar: …</span><button id="goLunar">Go</button></div>
+  <p class="sub" style="margin:9px 0 0; font-size:11px; line-height:1.45;">Moon's orbital tilt is shown ×6: watch the shadow cones sail above/below and only strike near the <span style="color:#8fd0ff;">nodes</span> — which is why eclipses are rare.</p>
+  </div>
+</div>
+
+<div id="readout" class="panel collapsed">
+  <button class="card-toggle" aria-expanded="false" aria-controls="readoutBody">
+    <span class="card-title">Moon phase</span>
+    <span class="caret" aria-hidden="true">▾</span>
+  </button>
+  <div id="readoutBody" class="card-body">
+    <canvas id="phasedisc" width="120" height="120"></canvas>
+    <p class="big" id="phaseName">New Moon</p>
+    <p class="date" id="dayLabel">—</p>
+    <div class="stat"><span>Illumination</span><span id="illum">0%</span></div>
+    <div class="stat"><span>Elongation</span><span id="elong">0°</span></div>
+    <div class="stat"><span>Moon ecliptic latitude</span><span id="node">0.0°</span></div>
+    <div id="eclipse">No eclipse right now</div>
+  </div>
+</div>
+
+<div id="skycard" class="panel collapsed">
+  <button class="card-toggle" aria-expanded="false" aria-controls="skycardBody">
+    <span class="card-title">Sky over Valencia</span>
+    <span class="caret" aria-hidden="true">▾</span>
+  </button>
+  <div id="skycardBody" class="card-body">
+    <canvas id="skydome" width="176" height="176"></canvas>
+    <div class="stat"><span>☀ Sun</span><span id="skySun">—</span></div>
+    <div class="stat"><span>🌙 Moon</span><span id="skyMoon">—</span></div>
+    <div id="skyState" class="skystate">—</div>
+  </div>
+</div>
+
+<div id="hint" class="panel">Drag to orbit · right-drag (or two-finger) to pan · scroll to zoom · <b>Go</b> to a real eclipse, then slow the speed</div>
+
+<div id="mobilebar" class="panel">
+  <button id="stepBackM" title="Back one day">−1d</button>
+  <button id="playBtnM" class="play active" title="Play / pause">⏸</button>
+  <button id="stepFwdM" title="Forward one day">+1d</button>
+  <button id="nowBtnM" title="Jump to now">Now</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+    "astronomy-engine": "https://cdn.jsdelivr.net/npm/astronomy-engine@2.1.19/+esm"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as Astronomy from 'astronomy-engine';
+
+// ---------------------------------------------------------------------------
+// Schematic DISTANCES, REAL ANGLES. True Sun–Earth–Moon distances/sizes can't
+// share a screen, so those stay compressed — but every angle (Sun & Moon
+// ecliptic longitude/latitude, phase, node positions, the observer's sky) is
+// computed from real ephemeris (Astronomy Engine) for an actual date & time.
+// ---------------------------------------------------------------------------
+const SUN_R = 4.0, EARTH_R = 1.15, MOON_R = 0.42;
+const EARTH_ORBIT = 46;      // Earth's distance from Sun (schematic)
+const MOON_ORBIT  = 7.5;     // Moon's distance from Earth (schematic)
+const DEG = Math.PI / 180;
+
+// Eclipses need the Moon near a NODE at new/full moon. At true scale the 5° orbital
+// tilt throws the Moon's shadow a few Earth-radii off target on an average month —
+// but at this compressed Moon distance that miss would be invisible. So the tilt
+// (and with it the Moon's latitude and its whole tilted orbit) is EXAGGERATED ×6:
+// the shadow cones then visibly sail above/below the other body most months and
+// only strike near the nodes. MOON_TILT_EXAG is tuned so that geometric strike ≈
+// the real eclipse limit (|ecliptic latitude| ≲ 1.5° at syzygy).
+const MOON_TILT_EXAG = 6;
+const MOON_INCL = 5.14;      // Moon's real mean orbital inclination (deg)
+
+// Observer on the globe — default Valencia, Spain (where this was built).
+const OBS = { name: 'Valencia', lat: 39.47, lon: -0.376, height: 15 };
+const OBSERVER = new Astronomy.Observer(OBS.lat, OBS.lon, OBS.height);
+
+// Map an ecliptic (longitude λ, latitude β) direction to scene axes: the
+// ecliptic plane is XZ, ecliptic north is +Y, λ measured in XZ from +X.
+// NOTE the −sin(λ) on Z: with a plain +sin(λ) the (X, north=+Y, λ=90°) triple is
+// a left-handed embedding of the ecliptic, which mirrors the whole scene — orbits
+// and rotation then run clockwise (retrograde) seen from the north pole. Negating
+// Z makes it right-handed, so everything orbits/spins the real, prograde way.
+function eclDir(lonDeg, latDeg, out) {
+  const l = lonDeg * DEG, b = latDeg * DEG, cb = Math.cos(b);
+  return (out || new THREE.Vector3()).set(cb * Math.cos(l), Math.sin(b), -cb * Math.sin(l));
+}
+
+// For the real globe orientation: the celestial north pole direction (fixed in
+// the scene ecliptic frame) and a reference observer at 0°N 0°E (Greenwich on
+// the equator) whose direction rotates with real Earth rotation.
+const EARTH_POLE = eclDir(90, 66.56);
+const OBS_GREENWICH = new Astronomy.Observer(0, 0, 0);
+
+// State ---------------------------------------------------------------------
+const state = {
+  epochMs: Date.now(),               // simulated instant (real UTC ms)
+  playing: true, speed: 1 / 24, cam: 'overview',   // speed in simulated days / real second (default 1 h/s)
+  orbits: true, shadows: true, labels: true, stars: true,
+  moonIllum: 1, moonWaxing: false,   // fed by computeAndDisplay → sky card
+  solarActive: false, lunarActive: false,     // real eclipse in progress → drives banner + spots
+};
+
+// Scene ---------------------------------------------------------------------
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070d);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 2000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.enablePan = true;              // right-drag / two-finger drag to pan
+controls.screenSpacePanning = true;     // pan in the screen plane (intuitive)
+
+// Starfield -----------------------------------------------------------------
+const starField = (() => {
+  const n = 1800, pos = new Float32Array(n * 3);
+  // deterministic pseudo-random so we avoid Math.random dependence
+  let s = 987654321;
+  const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  for (let i = 0; i < n; i++) {
+    const r = 600 + rnd() * 400;
+    const th = rnd() * Math.PI * 2, ph = Math.acos(2 * rnd() - 1);
+    pos[i*3]   = r * Math.sin(ph) * Math.cos(th);
+    pos[i*3+1] = r * Math.cos(ph);
+    pos[i*3+2] = r * Math.sin(ph) * Math.sin(th);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return new THREE.Points(g, new THREE.PointsMaterial({ color: 0x8899bb, size: 1.4, sizeAttenuation: false }));
+})();
+scene.add(starField);
+
+// Lighting: the Sun is the only real light source ---------------------------
+const sunLight = new THREE.PointLight(0xfff4e0, 3.2, 0, 0.0); // no falloff → acts ~directional at this scale
+scene.add(sunLight);
+scene.add(new THREE.AmbientLight(0x223044, 0.12)); // faint fill so night sides aren't pure black
+
+// Sun -----------------------------------------------------------------------
+const sun = new THREE.Mesh(
+  new THREE.SphereGeometry(SUN_R, 48, 48),
+  new THREE.MeshBasicMaterial({ color: 0xffcf66 })
+);
+scene.add(sun);
+const sunGlow = new THREE.Mesh(
+  new THREE.SphereGeometry(SUN_R * 1.35, 32, 32),
+  new THREE.MeshBasicMaterial({ color: 0xffb64d, transparent: true, opacity: 0.12, side: THREE.BackSide })
+);
+sun.add(sunGlow);
+
+// Earth ---------------------------------------------------------------------
+const earthPivot = new THREE.Object3D(); scene.add(earthPivot);  // Earth's orbit position
+// earthFixed carries the REAL Earth-fixed (ECEF) orientation, set each frame so
+// the texture's geography lines up with the ephemeris-placed stick and shadow.
+const earthFixed = new THREE.Object3D();
+earthPivot.add(earthFixed);
+const earthTex = new THREE.TextureLoader().load('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg');
+earthTex.colorSpace = THREE.SRGBColorSpace;
+// No texture mirror: eclDir is now a right-handed embedding of the ecliptic, so
+// three.js's own sphere UV renders the blue-marble geography the correct way
+// (Arabia east of Africa, Americas west of the Atlantic) with no flip.
+const earth = new THREE.Mesh(
+  new THREE.SphereGeometry(EARTH_R, 64, 48),
+  new THREE.MeshStandardMaterial({
+    map: earthTex, color: 0xffffff, roughness: 1.0, metalness: 0.0,
+    emissiveMap: earthTex, emissive: 0xffffff, emissiveIntensity: 0.06,  // faint night side
+  })
+);
+// The Earth-fixed basis puts Greenwich on +X, which is where three.js's sphere UV
+// maps texture longitude 0°, so no extra offset is needed. Verified: the Valencia
+// stick reads lon −0.37°, lat 39.3° (the ~0.2° is geodetic-vs-geocentric latitude),
+// and the 2026-08-12 umbra reads 65.0°N 25.3°W — matching the official eclipse.
+const TEX_OFFSET_DEG = 0;
+earth.rotation.y = TEX_OFFSET_DEG * DEG;
+earthFixed.add(earth);
+const earthPole = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.015, 0.015, EARTH_R * 2.6, 8),
+  new THREE.MeshBasicMaterial({ color: 0xaac4e0, transparent: true, opacity: 0.5 })
+);
+earthFixed.add(earthPole);
+
+// Observer rig: the red stick marking OBS's location. Re-seated every frame
+// along the observer's real zenith direction (from ephemeris), so it points to
+// the Sun at local noon and rides Earth's real rotation. Built along +X.
+const observerRig = new THREE.Object3D(); earthPivot.add(observerRig);
+const spinStick = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.045, 0.045, 1.1, 12),
+  new THREE.MeshBasicMaterial({ color: 0xff3b30 })
+);
+spinStick.rotation.z = -Math.PI / 2;       // lay along +X (radial, outward)
+spinStick.position.x = EARTH_R;            // straddles the surface
+observerRig.add(spinStick);
+const spinTip = new THREE.Mesh(
+  new THREE.SphereGeometry(0.1, 12, 12),
+  new THREE.MeshBasicMaterial({ color: 0xff5a4d })
+);
+spinTip.position.x = EARTH_R + 0.55;
+observerRig.add(spinTip);
+
+// Moon: a child of the (unrotated) orbit pivot; positioned from real geocentric
+// ecliptic coordinates each frame.
+const moon = new THREE.Mesh(
+  new THREE.SphereGeometry(MOON_R, 40, 40),
+  new THREE.MeshStandardMaterial({ color: 0xcfcfcf, roughness: 1.0, metalness: 0.0, emissive: 0x0a0a0c, emissiveIntensity: 1 })
+);
+moon.position.x = MOON_ORBIT;
+earthPivot.add(moon);
+
+// Orbit paths ---------------------------------------------------------------
+function ringLine(radius, color, segments = 256) {
+  const pts = [];
+  for (let i = 0; i <= segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    pts.push(new THREE.Vector3(Math.cos(a) * radius, 0, Math.sin(a) * radius));
+  }
+  const g = new THREE.BufferGeometry().setFromPoints(pts);
+  return new THREE.Line(g, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.4 }));
+}
+const earthOrbitLine = ringLine(EARTH_ORBIT, 0x466088); scene.add(earthOrbitLine);
+
+// Moon system rings. Faint flat ring = the ecliptic plane (where the Sun and
+// Earth's shadow live); brighter ring = the Moon's orbit, drawn tilted by the
+// exaggerated inclination. The two cross at the NODES; the node line points along
+// the only two directions where the Sun can line up for an eclipse.
+const eclipticRing = ringLine(MOON_ORBIT, 0x39435c); eclipticRing.material.opacity = 0.3; earthPivot.add(eclipticRing);
+const moonOrbitLine = ringLine(MOON_ORBIT, 0x9a8fd0); moonOrbitLine.material.opacity = 0.6; earthPivot.add(moonOrbitLine);
+const nodeMat = new THREE.MeshBasicMaterial({ color: 0x8fd0ff });
+const nodeAsc  = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 14), nodeMat); earthPivot.add(nodeAsc);
+const nodeDesc = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 14), nodeMat); earthPivot.add(nodeDesc);
+const nodeLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]),
+  new THREE.LineBasicMaterial({ color: 0x7f96d8, transparent: true, opacity: 0.5 })
+);
+earthPivot.add(nodeLine);
+const moonSystem = [eclipticRing, moonOrbitLine, nodeAsc, nodeDesc, nodeLine];
+
+// Shadow cones (indicative geometry, not to scale) --------------------------
+// Umbra: base at the body (≈ its silhouette), tapering to a point on the far
+// side. ConeGeometry has its apex at +Y; we translate so the BASE sits at the
+// origin and the apex is at +len·(+Y), then per-frame we align +Y with the
+// away-from-Sun direction — so the solid points into shadow, not at the Sun.
+// A translucent umbra cone plus a crisp outline of its silhouette, so the shadow
+// beam reads clearly against the black sky and you can see exactly where it aims.
+function shadowCone(len, baseR, color) {
+  const grp = new THREE.Group();
+  const geo = new THREE.ConeGeometry(baseR, len, 44, 1, true);
+  geo.translate(0, len / 2, 0);            // base → origin, apex → +len
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false });
+  grp.add(new THREE.Mesh(geo, mat));
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geo, 30),
+    new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false })
+  );
+  grp.add(edges);
+  return grp;
+}
+// Moon's umbra: reaches a touch past Earth's distance, so at a new moon near a node
+// its tip lands on Earth (solar eclipse) and otherwise clearly sails above/below.
+const moonShadow = shadowCone(MOON_ORBIT * 1.08, MOON_R * 0.9, 0x2b3a55);
+scene.add(moonShadow);
+// Earth's umbra: extends past the Moon's orbit so the Moon can pass through it at a
+// full moon near a node (lunar eclipse) and otherwise ride above/below it.
+const earthShadow = shadowCone(MOON_ORBIT * 1.75, EARTH_R * 0.96, 0x2b3a55);
+scene.add(earthShadow);
+
+// Projected shadow SPOTS: a soft dark disc laid on the surface where a body's
+// shadow axis strikes the other body. This is the "shadow running over Earth"
+// you actually watch during an eclipse. Only appears when the Sun–caster axis
+// passes within the receiver's radius (i.e. real alignment near a node).
+const SPOT_TEX = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grad.addColorStop(0.0, 'rgba(0,0,0,0.88)');
+  grad.addColorStop(0.35, 'rgba(0,0,0,0.72)');
+  grad.addColorStop(0.7, 'rgba(5,8,16,0.35)');
+  grad.addColorStop(1.0, 'rgba(5,8,16,0)');
+  g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+function makeSpot(size) {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(size, size),
+    new THREE.MeshBasicMaterial({ map: SPOT_TEX, transparent: true, depthWrite: false })
+  );
+  m.visible = false; m.renderOrder = 2;
+  scene.add(m); return m;
+}
+const shadowSpotEarth = makeSpot(EARTH_R * 1.15);  // Moon's shadow on Earth (solar)
+const shadowSpotMoon  = makeSpot(MOON_R * 1.7);    // Earth's shadow on Moon (lunar)
+
+// Labels (CSS-free sprite text) ---------------------------------------------
+function makeLabel(text) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.font = '600 34px -apple-system, sans-serif'; ctx.fillStyle = '#dfe6f2';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)'; ctx.shadowBlur = 6;
+  ctx.fillText(text, 128, 34);
+  const tex = new THREE.CanvasTexture(c); tex.anisotropy = 4;
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  spr.scale.set(6, 1.5, 1);
+  return spr;
+}
+const sunLabel = makeLabel('Sun'); sunLabel.position.y = SUN_R + 2.2; sun.add(sunLabel);
+const earthLabel = makeLabel('Earth'); earthLabel.position.y = EARTH_R + 1.6; earth.add(earthLabel);
+const moonLabel = makeLabel('Moon'); moonLabel.position.y = MOON_R + 1.1; moon.add(moonLabel);
+
+// ---------------------------------------------------------------------------
+// Per-frame positioning
+// ---------------------------------------------------------------------------
+const _sunPos = new THREE.Vector3(), _earthPos = new THREE.Vector3(), _moonPos = new THREE.Vector3();
+const _tmp = new THREE.Vector3(), _tmp2 = new THREE.Vector3(), _up = new THREE.Vector3(0,1,0);
+const _lastEarthFollow = new THREE.Vector3(), _camDelta = new THREE.Vector3();
+const _eDir = new THREE.Vector3(), _mDir = new THREE.Vector3(), _oDir = new THREE.Vector3();
+const _XAXIS = new THREE.Vector3(1, 0, 0);
+const _gwDir = new THREE.Vector3(), _xg = new THREE.Vector3(), _zg = new THREE.Vector3();
+const _mtx = new THREE.Matrix4();
+
+function updatePositions() {
+  const t = Astronomy.MakeTime(new Date(state.epochMs));
+
+  // Real geocentric ecliptic-of-date coordinates.
+  const sunEcl = Astronomy.SunPosition(t);     // Sun as seen from Earth: elon, elat≈0
+  const gm  = Astronomy.EclipticGeoMoon(t);    // Moon: lon, lat, dist
+
+  // Earth's heliocentric position = opposite the Sun's geocentric direction.
+  eclDir(sunEcl.elon, 0, _eDir);                              // Earth → Sun
+  earthPivot.position.copy(_eDir).multiplyScalar(-EARTH_ORBIT);
+
+  // Moon offset from Earth by its real ecliptic longitude, with its real latitude
+  // EXAGGERATED ×6 (see MOON_TILT_EXAG) so it visibly rides above/below the ecliptic
+  // and its shadow's near-miss/hit is legible. Node crossings stay real (lat→0), so
+  // strikes still land on the real eclipse dates.
+  eclDir(gm.lon, gm.lat * MOON_TILT_EXAG, _mDir);
+  moon.position.copy(_mDir).multiplyScalar(MOON_ORBIT);        // relative to (unrotated) earthPivot
+  moon.lookAt(earthPivot.position);                            // keep a face toward Earth
+  refreshMoonOrbit(t, state.epochMs);                          // tilted orbit ring + node markers (throttled)
+
+  // Observer/stick along its real zenith direction (ecliptic of the observer's
+  // geocentric position vector). The rig sits at Earth's centre and only rotates;
+  // its child stick reaches the surface along +X. It sweeps as Earth truly rotates.
+  const obsEcl = Astronomy.Ecliptic(Astronomy.ObserverVector(t, OBSERVER, false));
+  eclDir(obsEcl.elon, obsEcl.elat, _oDir);
+  observerRig.quaternion.setFromUnitVectors(_XAXIS, _oDir);
+
+  // Real Earth-fixed orientation so the texture's geography matches the stick &
+  // shadow: Y = celestial pole, X = the 0°N 0°E direction (rotates with Earth),
+  // Z = X×Y. The textured mesh carries a fixed UV offset to align Greenwich.
+  const gw = Astronomy.Ecliptic(Astronomy.ObserverVector(t, OBS_GREENWICH, false));
+  eclDir(gw.elon, gw.elat, _gwDir);
+  _xg.copy(_gwDir).addScaledVector(EARTH_POLE, -_gwDir.dot(EARTH_POLE)).normalize();
+  _zg.crossVectors(_xg, EARTH_POLE).normalize();
+  _mtx.makeBasis(_xg, EARTH_POLE, _zg);
+  earthFixed.quaternion.setFromRotationMatrix(_mtx);
+
+  // World positions (the Sun mesh sits at the origin).
+  _sunPos.set(0, 0, 0);
+  earth.getWorldPosition(_earthPos);
+  moon.getWorldPosition(_moonPos);
+  sunLight.position.copy(_sunPos);
+
+  // Real eclipse-in-progress test (drives banner + gates the shadow spots, since
+  // at this schematic scale the raw ray test alone is too lenient).
+  updateEclipseState(state.epochMs);
+
+  // Orient shadow cones so the solid points directly away from the Sun.
+  orientShadow(earthShadow, _earthPos, _sunPos);
+  orientShadow(moonShadow, _moonPos, _sunPos);
+  earthShadow.visible = state.shadows;
+  moonShadow.visible = state.shadows;
+
+  // Solar: place the umbra spot at its REAL ground direction (from ephemeris),
+  // so it lands under the observer during a real eclipse rather than at the
+  // schematic sub-solar point.
+  if (state.shadows && state.solarActive && realUmbraDir(t, _spotDir)) {
+    shadowSpotEarth.position.copy(_earthPos).addScaledVector(_spotDir, EARTH_R * 1.02);
+    shadowSpotEarth.quaternion.setFromUnitVectors(_PLANE_N, _spotDir);
+    shadowSpotEarth.visible = true;
+  } else {
+    shadowSpotEarth.visible = false;
+  }
+  // Lunar: the Moon simply darkens where Earth's shadow axis meets it (schematic
+  // position on the near face is fine — we always see that face).
+  const lunarHit = projectShadow(_earthPos, _moonPos, MOON_R, shadowSpotMoon);
+  shadowSpotMoon.visible = state.shadows && state.lunarActive && lunarHit;
+}
+
+function orientShadow(cone, bodyPos, sunPos) {
+  cone.position.copy(bodyPos);
+  _tmp.copy(bodyPos).sub(sunPos).normalize();   // away-from-Sun direction
+  // Geometry base is at origin, apex at +Y; align +Y with the shadow direction.
+  cone.quaternion.setFromUnitVectors(_up, _tmp);
+}
+
+// Tilted Moon orbit + line of nodes. Recomputed occasionally (the nodes regress
+// slowly, ~1.5°/month). The flat orbit ring is tipped about the current node line
+// by the exaggerated inclination, so it stays pinned to the two node markers, and
+// the Moon (placed at its exaggerated latitude) rides along it.
+let _moonOrbitForMs = -Infinity;
+const _nodeAxis = new THREE.Vector3();
+function refreshMoonOrbit(t, nowMs) {
+  if (Math.abs(nowMs - _moonOrbitForMs) < 12 * HOUR) return;
+  let ascLon;
+  try {
+    const nd = Astronomy.SearchMoonNode(t);
+    const nlon = Astronomy.EclipticGeoMoon(nd.time).lon;
+    ascLon = (nd.kind === Astronomy.NodeEventKind.Ascending) ? nlon : nlon + 180;
+  } catch { return; }
+  eclDir(ascLon, 0, _nodeAxis);   // unit direction of a node, in the ecliptic plane
+  moonOrbitLine.quaternion.setFromAxisAngle(_nodeAxis, MOON_INCL * MOON_TILT_EXAG * DEG);
+  nodeAsc.position.copy(_nodeAxis).multiplyScalar(MOON_ORBIT);
+  nodeDesc.position.copy(_nodeAxis).multiplyScalar(-MOON_ORBIT);
+  const L = MOON_ORBIT * 1.28, a = nodeLine.geometry.attributes.position.array;
+  a[0] = _nodeAxis.x * L;  a[1] = _nodeAxis.y * L;  a[2] = _nodeAxis.z * L;
+  a[3] = -_nodeAxis.x * L; a[4] = -_nodeAxis.y * L; a[5] = -_nodeAxis.z * L;
+  nodeLine.geometry.attributes.position.needsUpdate = true;
+  _moonOrbitForMs = nowMs;
+}
+
+// Where does `caster`'s shadow axis (the Sun→caster ray, continued) strike the
+// `receiver` sphere? If it passes within the receiver's radius, lay the soft
+// shadow disc on the surface at that point. Returns whether a hit occurred.
+const _sd = new THREE.Vector3(), _soc = new THREE.Vector3(),
+      _shit = new THREE.Vector3(), _snorm = new THREE.Vector3();
+const _PLANE_N = new THREE.Vector3(0, 0, 1);
+function projectShadow(casterPos, receiverPos, receiverR, spot) {
+  _sd.copy(casterPos).sub(_sunPos).normalize();       // shadow travels away from Sun
+  _soc.copy(casterPos).sub(receiverPos);
+  const b = 2 * _sd.dot(_soc);
+  const c = _soc.dot(_soc) - receiverR * receiverR;
+  const disc = b * b - 4 * c;
+  if (disc <= 0) { spot.visible = false; return false; }         // axis misses the body
+  const t = (-b - Math.sqrt(disc)) / 2;                          // near-surface hit
+  if (t <= 0) { spot.visible = false; return false; }            // body is toward the Sun, not shadowed
+  _shit.copy(casterPos).addScaledVector(_sd, t);
+  _snorm.copy(_shit).sub(receiverPos).normalize();
+  spot.position.copy(_shit).addScaledVector(_snorm, receiverR * 0.02);
+  spot.quaternion.setFromUnitVectors(_PLANE_N, _snorm);          // lay flat on the surface
+  spot.visible = state.shadows;
+  return true;
+}
+
+// The umbra's real GROUND POINT can't come from the schematic geometry — where a
+// solar eclipse lands depends on the true Moon-distance / Earth-radius ratio
+// (~60), which the compressed scale destroys. So intersect the real shadow axis
+// with a real-size Earth (in AU) from ephemeris, and return only its DIRECTION,
+// which we then map into the scene. This makes the spot land at the real place
+// (e.g. Valencia at its 2026-08-12 sunset totality) — right under the observer.
+const _AU_EARTH_R = 6378.137 / 149597870.7;   // Earth equatorial radius in AU
+const _spotDir = new THREE.Vector3();
+function realUmbraDir(t, out) {
+  const m = Astronomy.GeoVector(Astronomy.Body.Moon, t, true);   // geocentric EQJ (AU)
+  const s = Astronomy.GeoVector(Astronomy.Body.Sun, t, true);
+  let dx = m.x - s.x, dy = m.y - s.y, dz = m.z - s.z;            // away from Sun
+  const dl = Math.hypot(dx, dy, dz); dx /= dl; dy /= dl; dz /= dl;
+  const b = 2 * (dx*m.x + dy*m.y + dz*m.z);
+  const c = (m.x*m.x + m.y*m.y + m.z*m.z) - _AU_EARTH_R*_AU_EARTH_R;
+  const disc = b*b - 4*c;
+  if (disc <= 0) return false;                                   // umbra axis misses Earth
+  const tt = (-b - Math.sqrt(disc)) / 2;                         // near (sunlit) surface
+  if (tt <= 0) return false;
+  const ec = Astronomy.Ecliptic(new Astronomy.Vector(m.x + tt*dx, m.y + tt*dy, m.z + tt*dz, t));
+  eclDir(ec.elon, ec.elat, out);                                // geocentric direction of the spot
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Real eclipse data: cache the nearest solar & lunar eclipse and decide whether
+// one is actually in progress at the simulated instant. The schematic ray test
+// alone is far too lenient at compressed scale, so real eclipses gate the spots.
+// ---------------------------------------------------------------------------
+const HOUR = 3600e3, DAYMS = 86400e3;
+const ecl = { solarWin: null, lunarWin: null, nextSolar: null, nextLunar: null, forMs: -Infinity };
+
+function refreshEclipseData(nowMs) {
+  const back = Astronomy.MakeTime(new Date(nowMs - 2 * DAYMS));   // catch one just begun
+  const here = Astronomy.MakeTime(new Date(nowMs));
+  try { const s = Astronomy.SearchGlobalSolarEclipse(back);
+        ecl.solarWin = { peak: s.peak.date.getTime(), kind: s.kind, half: 2.2 * HOUR }; } catch { ecl.solarWin = null; }
+  try { const l = Astronomy.SearchLunarEclipse(back);
+        const half = (l.sd_partial > 0 ? l.sd_partial : l.sd_penum) * 60e3;
+        ecl.lunarWin = { peak: l.peak.date.getTime(), kind: l.kind, half }; } catch { ecl.lunarWin = null; }
+  try { ecl.nextSolar = Astronomy.SearchGlobalSolarEclipse(here); } catch { ecl.nextSolar = null; }
+  try { ecl.nextLunar = Astronomy.SearchLunarEclipse(here); } catch { ecl.nextLunar = null; }
+  ecl.forMs = nowMs;
+  // Update the "next eclipse" panel.
+  const fmtE = (e) => e ? `${e.kind} · ${e.peak.date.toISOString().slice(0, 16).replace('T', ' ')}Z` : '—';
+  document.getElementById('nextSolarTxt').textContent = 'Next solar: ' + fmtE(ecl.nextSolar);
+  document.getElementById('nextLunarTxt').textContent = 'Next lunar: ' + fmtE(ecl.nextLunar);
+}
+function updateEclipseState(nowMs) {
+  if (Math.abs(nowMs - ecl.forMs) > 12 * HOUR) refreshEclipseData(nowMs);
+  state.solarActive = !!(ecl.solarWin && Math.abs(nowMs - ecl.solarWin.peak) < ecl.solarWin.half);
+  state.lunarActive = !!(ecl.lunarWin && Math.abs(nowMs - ecl.lunarWin.peak) < ecl.lunarWin.half);
+}
+
+// ---------------------------------------------------------------------------
+// Phase readout — driven by real ephemeris (Astronomy.MoonPhase = elongation).
+// ---------------------------------------------------------------------------
+const phaseCanvas = document.getElementById('phasedisc');
+const pctx = phaseCanvas.getContext('2d');
+
+function fmtDate(ms) {
+  return new Date(ms).toISOString().slice(0, 16).replace('T', '  ') + ' UTC';
+}
+
+function computeAndDisplay() {
+  const t = Astronomy.MakeTime(new Date(state.epochMs));
+  const elongDeg = Astronomy.MoonPhase(t);          // 0=new · 90=first qtr · 180=full · 270=last
+  const illum = (1 - Math.cos(elongDeg * DEG)) / 2;
+  const beta = Astronomy.EclipticGeoMoon(t).lat;    // Moon's ecliptic latitude (node distance)
+  const name = phaseName(elongDeg);
+
+  // Banner from the real eclipse-in-progress test.
+  const nearNew = elongDeg < 20 || elongDeg > 340;
+  const nearFull = Math.abs(elongDeg - 180) < 20;
+  let e = { cls: '', text: 'No eclipse right now' };
+  if (state.solarActive)      e = { cls: 'solar', text: '☀ Solar eclipse in progress — the Moon\'s shadow is on Earth' };
+  else if (state.lunarActive) e = { cls: 'lunar', text: '🌑 Lunar eclipse in progress — the Moon is in Earth\'s shadow' };
+  else if (nearNew)  e = { cls: '', text: 'New moon — but no eclipse this month' };
+  else if (nearFull) e = { cls: '', text: 'Full moon — but no eclipse this month' };
+
+  document.getElementById('phaseName').textContent = name;
+  document.getElementById('dayLabel').textContent = fmtDate(state.epochMs);
+  document.getElementById('illum').textContent = Math.round(illum * 100) + '%';
+  // elongDeg is the 0–360 phase angle; the Sun–Moon angular separation (elongation)
+  // folds that to 0–180 (0 at new, 180 at full), same on the waxing and waning side.
+  const elongSep = elongDeg <= 180 ? elongDeg : 360 - elongDeg;
+  document.getElementById('elong').textContent = Math.round(elongSep) + '°';
+  document.getElementById('node').textContent = beta.toFixed(2) + '°';
+  const el = document.getElementById('eclipse'); el.className = e.cls; el.textContent = e.text;
+
+  state.moonIllum = illum;
+  state.moonWaxing = (elongDeg < 180);
+  drawPhaseDisc(elongDeg);
+}
+
+function phaseName(d) {
+  if (d < 11 || d > 349) return 'New Moon';
+  if (d < 79) return 'Waxing Crescent';
+  if (d < 101) return 'First Quarter';
+  if (d < 169) return 'Waxing Gibbous';
+  if (d < 191) return 'Full Moon';
+  if (d < 259) return 'Waning Gibbous';
+  if (d < 281) return 'Last Quarter';
+  return 'Waning Crescent';
+}
+
+// 2D moon phase disc as seen from Earth.
+// Per-row scan: at height y the disc spans x ∈ [-hw, hw] with hw = √(R²−y²); the
+// terminator sits at x_t = cos(elong)·hw. Waxing → lit side is x ≥ x_t (right);
+// waning mirrors to the left. This is exact and avoids fiddly arc-sweep flags.
+function drawPhaseDisc(elongDeg) {
+  const w = phaseCanvas.width, h = phaseCanvas.height, cx = w/2, cy = h/2, R = 52;
+  pctx.clearRect(0, 0, w, h);
+  const el = elongDeg * Math.PI / 180;
+  const ct = Math.cos(el);              // terminator x-factor: +1 new … −1 full
+  const waxing = elongDeg < 180;        // N-hemisphere convention: waxing lit on right
+  for (let dy = -R; dy <= R; dy++) {
+    const hw = Math.sqrt(Math.max(0, R*R - dy*dy));
+    if (hw < 0.5) continue;
+    const xt = ct * hw;                 // terminator x at this row
+    const y = cy + dy;
+    // dark base row
+    pctx.fillStyle = '#1b2130';
+    pctx.fillRect(cx - hw, y, hw * 2, 1);
+    // lit segment
+    pctx.fillStyle = '#e9edf5';
+    if (waxing) pctx.fillRect(cx + xt, y, (cx + hw) - (cx + xt), 1);
+    else        pctx.fillRect(cx - hw, y, (cx - xt) - (cx - hw), 1);
+  }
+  // rim
+  pctx.strokeStyle = 'rgba(150,170,200,0.4)'; pctx.lineWidth = 1;
+  pctx.beginPath(); pctx.arc(cx, cy, R, 0, 7); pctx.stroke();
+}
+
+// ---------------------------------------------------------------------------
+// Camera modes
+// ---------------------------------------------------------------------------
+function applyCam(mode, snap = true) {
+  state.cam = mode;
+  controls.enabled = true;
+  if (mode === 'overview') {
+    controls.target.set(0, 0, 0);
+    if (snap) camera.position.set(0, 55, 95);
+    controls.minDistance = 8; controls.maxDistance = 400;
+  } else if (mode === 'top') {
+    controls.target.set(0, 0, 0);
+    if (snap) camera.position.set(0, 150, 0.01);
+    controls.minDistance = 8; controls.maxDistance = 400;
+  } else if (mode === 'earth') {
+    controls.minDistance = 1.5; controls.maxDistance = 40;
+  } else if (mode === 'follow') {
+    // Center on Earth and ride along with it. Full orbit / zoom / pan around
+    // the planet, close enough to watch it spin (red stick) and the Moon circle it.
+    controls.minDistance = 2; controls.maxDistance = 140;
+    if (snap) {
+      controls.target.copy(_earthPos);
+      camera.position.copy(_earthPos).add(new THREE.Vector3(7, 4, 11));
+    }
+    _lastEarthFollow.copy(_earthPos);
+  }
+  const idmap = { overview: 'camOverview', top: 'camTop', follow: 'camFollow', earth: 'camEarth' };
+  Object.values(idmap).forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById(idmap[mode]).classList.add('active');
+}
+
+// In Earth mode we sit on Earth's Moon-facing surface and look outward at the
+// Moon, so you watch the same lit/dark phase an observer on Earth would see.
+function updateEarthCam() {
+  if (state.cam !== 'earth') return;
+  const toMoon = _tmp2.copy(_moonPos).sub(_earthPos).normalize();
+  // Camera just outside Earth's surface on the side facing the Moon.
+  camera.position.copy(_earthPos).addScaledVector(toMoon, EARTH_R + 0.35);
+  camera.position.y += 0.25;
+  controls.target.copy(_moonPos);
+}
+
+// In Follow mode, translate camera + target by Earth's per-frame movement so the
+// view rides along with the orbiting planet while OrbitControls keeps handling
+// the user's own orbit / zoom / pan relative to Earth.
+function updateFollowCam() {
+  if (state.cam !== 'follow') return;
+  _camDelta.copy(_earthPos).sub(_lastEarthFollow);
+  camera.position.add(_camDelta);
+  controls.target.add(_camDelta);
+  _lastEarthFollow.copy(_earthPos);
+}
+
+// ---------------------------------------------------------------------------
+// "Sky over <observer>" card — a real local all-sky dome. Altitude & azimuth of
+// the Sun and Moon are computed topocentrically from ephemeris for the observer,
+// then plotted on a fisheye dome: centre = zenith, rim = horizon. Below the
+// horizon → the body has set. The sky tint tracks the Sun's real altitude.
+// ---------------------------------------------------------------------------
+const skyCanvas = document.getElementById('skydome');
+const sctx = skyCanvas.getContext('2d');
+
+// Real topocentric altitude/azimuth (radians) of a body for the observer.
+function skyAltAz(body, t) {
+  const eq = Astronomy.Equator(body, t, OBSERVER, true, true);      // topocentric, of date
+  const hz = Astronomy.Horizon(t, OBSERVER, eq.ra, eq.dec, 'normal');
+  return { alt: hz.altitude * DEG, az: hz.azimuth * DEG };
+}
+
+function drawSkyCard() {
+  const t = Astronomy.MakeTime(new Date(state.epochMs));
+  const sun = skyAltAz(Astronomy.Body.Sun, t), moon = skyAltAz(Astronomy.Body.Moon, t);
+  const w = skyCanvas.width, h = skyCanvas.height, cx = w / 2, cy = h / 2, R = Math.min(cx, cy) - 12;
+
+  sctx.clearRect(0, 0, w, h);
+  sctx.save();
+  sctx.beginPath(); sctx.arc(cx, cy, R, 0, 7); sctx.clip();
+
+  // Sky tint from the Sun's altitude: day → twilight → night.
+  const sA = sun.alt * 180 / Math.PI;
+  let top, bot;
+  if (sA > 6)       { top = '#1b3a63'; bot = '#3f6ea6'; }        // day
+  else if (sA > -6) { top = '#243349'; bot = '#c8794a'; }        // twilight glow at horizon
+  else              { top = '#080b16'; bot = '#131a2b'; }        // night
+  const grad = sctx.createLinearGradient(0, cy - R, 0, cy + R);
+  grad.addColorStop(0, top); grad.addColorStop(1, bot);
+  sctx.fillStyle = grad; sctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+
+  // Altitude rings (30° / 60°) and a zenith dot.
+  sctx.strokeStyle = 'rgba(255,255,255,0.10)'; sctx.lineWidth = 1;
+  for (const a of [30, 60]) { const rr = R * (1 - a / 90); sctx.beginPath(); sctx.arc(cx, cy, rr, 0, 7); sctx.stroke(); }
+  sctx.restore();
+
+  // Project (alt,az) → dome point. r = 0 at zenith, R at horizon. East on the
+  // left (planisphere "looking up" convention); labels use the same mapping.
+  const project = (alt, az) => {
+    const r = R * (1 - Math.max(alt, 0) / (Math.PI / 2));
+    return [cx - r * Math.sin(az), cy - r * Math.cos(az)];
+  };
+
+  // Horizon rim + cardinals.
+  sctx.strokeStyle = 'rgba(160,180,210,0.55)'; sctx.lineWidth = 1.5;
+  sctx.beginPath(); sctx.arc(cx, cy, R, 0, 7); sctx.stroke();
+  sctx.fillStyle = 'rgba(200,210,230,0.75)';
+  sctx.font = '600 11px -apple-system, sans-serif';
+  sctx.textAlign = 'center'; sctx.textBaseline = 'middle';
+  const card = { N: 0, E: Math.PI / 2, S: Math.PI, W: -Math.PI / 2 };
+  for (const [k, az] of Object.entries(card)) {
+    const x = cx - (R + 6) * Math.sin(az), y = cy - (R + 6) * Math.cos(az);
+    sctx.fillText(k, x, y);
+  }
+
+  // Draw a body: full disc if above the horizon, a dim rim marker if below.
+  const drawBody = (o, up, drawFn) => {
+    if (o.alt >= 0) { const [x, y] = project(o.alt, o.az); drawFn(x, y, 1); }
+    else {           // just below horizon → dim marker on the rim at its azimuth
+      const x = cx - R * Math.sin(o.az), y = cy - R * Math.cos(o.az);
+      drawFn(x, y, 0.28);
+    }
+  };
+  // Moon first (so the Sun overlaps it if they coincide).
+  drawBody(moon, false, (x, y, a) => drawMoonGlyph(x, y, 7, state.moonIllum, state.moonWaxing, a));
+  drawBody(sun, true, (x, y, a) => {
+    sctx.globalAlpha = a;
+    const g = sctx.createRadialGradient(x, y, 0, x, y, 14);
+    g.addColorStop(0, 'rgba(255,220,120,0.9)'); g.addColorStop(1, 'rgba(255,200,80,0)');
+    sctx.fillStyle = g; sctx.beginPath(); sctx.arc(x, y, 14, 0, 7); sctx.fill();
+    sctx.fillStyle = '#ffd54a'; sctx.beginPath(); sctx.arc(x, y, 6, 0, 7); sctx.fill();
+    sctx.globalAlpha = 1;
+  });
+
+  // Readout under the dome.
+  const fmt = a => (a * 180 / Math.PI).toFixed(0) + '°';
+  document.getElementById('skySun').textContent  = sun.alt >= 0 ? 'up ' + fmt(sun.alt)  : 'below horizon';
+  document.getElementById('skyMoon').textContent = moon.alt >= 0 ? 'up ' + fmt(moon.alt) : 'below horizon';
+  document.getElementById('skyState').textContent = sA > 6 ? '☀ Day' : sA > -6 ? '🌅 Twilight' : '🌙 Night';
+}
+
+// Small moon glyph with a phase terminator (per-row scan, like the big disc).
+function drawMoonGlyph(cxp, cyp, r, illum, waxing, alpha) {
+  sctx.globalAlpha = alpha;
+  // illum is fraction lit; recover terminator factor ct = 1 - 2*illum? No — use
+  // ct = cos(elong); illum = (1-cos)/2 ⇒ cos = 1 - 2*illum.
+  const ct = 1 - 2 * illum;
+  for (let dy = -r; dy <= r; dy++) {
+    const hw = Math.sqrt(Math.max(0, r * r - dy * dy));
+    if (hw < 0.4) continue;
+    const xt = ct * hw, y = cyp + dy;
+    sctx.fillStyle = '#3a4152'; sctx.fillRect(cxp - hw, y, hw * 2, 1);
+    sctx.fillStyle = '#e9edf5';
+    if (waxing) sctx.fillRect(cxp + xt, y, (cxp + hw) - (cxp + xt), 1);
+    else        sctx.fillRect(cxp - hw, y, (cxp - xt) - (cxp - hw), 1);
+  }
+  sctx.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------------------
+// UI wiring
+// ---------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const playBtn = $('playBtn');
+const playBtnM = $('playBtnM');
+function setPlaying(v) {
+  state.playing = v;
+  playBtn.textContent = v ? '⏸ Pause' : '▶ Play';
+  playBtn.classList.toggle('active', v);
+  playBtnM.textContent = v ? '⏸' : '▶';
+  playBtnM.classList.toggle('active', v);
+}
+playBtn.onclick = () => setPlaying(!state.playing);
+playBtnM.onclick = () => setPlaying(!state.playing);
+
+// Collapsible cards: every .card-toggle collapses its own .panel.
+// All cards start collapsed (set in the markup) so the scene is unobstructed.
+document.querySelectorAll('.card-toggle').forEach(btn => {
+  const panel = btn.closest('.panel');
+  btn.addEventListener('click', () => {
+    const collapsed = panel.classList.toggle('collapsed');
+    btn.setAttribute('aria-expanded', String(!collapsed));
+  });
+});
+
+// Time controls. The datetime picker is treated as UTC to stay unambiguous.
+function toInputValue(ms) {
+  const d = new Date(ms);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+}
+function syncDateInput() { $('dt').value = toInputValue(state.epochMs); }
+function nudge(ms) { state.epochMs += ms; syncDateInput(); }
+$('stepBack').onclick = () => nudge(-DAYMS);
+$('stepFwd').onclick  = () => nudge(+DAYMS);
+$('hourBack').onclick = () => nudge(-HOUR);
+$('hourFwd').onclick  = () => nudge(+HOUR);
+const goNow = () => { state.epochMs = Date.now(); syncDateInput(); };
+$('nowBtn').onclick   = goNow;
+$('stepBackM').onclick = () => nudge(-DAYMS);
+$('stepFwdM').onclick  = () => nudge(+DAYMS);
+$('nowBtnM').onclick   = goNow;
+$('dt').onchange = e => { const ms = Date.parse(e.target.value + ':00Z'); if (!isNaN(ms)) state.epochMs = ms; };
+
+$('speed').oninput = e => { state.speed = +e.target.value; $('speedVal').textContent = fmtSpeed(state.speed); };
+function fmtSpeed(v) { return v < 1 ? Math.round(v * 24) + ' h/s' : (Math.round(v * 10) / 10) + ' d/s'; }
+
+$('goSolar').onclick = () => { if (ecl.nextSolar) { state.epochMs = ecl.nextSolar.peak.date.getTime(); syncDateInput(); setPlaying(false); } };
+$('goLunar').onclick = () => { if (ecl.nextLunar) { state.epochMs = ecl.nextLunar.peak.date.getTime(); syncDateInput(); setPlaying(false); } };
+
+$('tOrbits').onchange = e => { state.orbits = e.target.checked; earthOrbitLine.visible = state.orbits; moonSystem.forEach(o => o.visible = state.orbits); };
+$('tShadows').onchange = e => { state.shadows = e.target.checked; };
+$('tLabels').onchange = e => { state.labels = e.target.checked; [sunLabel, earthLabel, moonLabel].forEach(l => l.visible = state.labels); };
+$('tStars').onchange = e => { state.stars = e.target.checked; starField.visible = state.stars; };
+
+$('camOverview').onclick = () => applyCam('overview');
+$('camTop').onclick = () => applyCam('top');
+$('camEarth').onclick = () => applyCam('earth');
+$('camFollow').onclick = () => applyCam('follow');
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---------------------------------------------------------------------------
+// Main loop
+// ---------------------------------------------------------------------------
+$('speedVal').textContent = fmtSpeed(state.speed);
+syncDateInput();
+let last = performance.now();
+applyCam('follow');
+function tick(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state.playing) { state.epochMs += dt * state.speed * DAYMS; syncDateInput(); }
+  updatePositions();
+  updateEarthCam();
+  updateFollowCam();
+  computeAndDisplay();
+  drawSkyCard();
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>
