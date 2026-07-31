@@ -2,6 +2,12 @@
 
 An interactive **Sun · Earth · Moon** model for building intuition about **moon phases** and **eclipses** — driven by **real astronomy for real calendar dates**. Pick a date and the phases match your calendar; the eclipse list shows actual upcoming eclipses you can jump to. Single self-contained HTML file, no build step.
 
+**→ [dimoon.pages.dev](https://dimoon.pages.dev)**
+
+![The 2026-08-12 total solar eclipse: the Moon's shadow cone striking Earth, a 0%-lit New Moon, and the Sun and Moon sitting on top of each other low over Valencia](docs/screenshot.webp)
+
+## Run it locally
+
 Open `index.html` through a local web server (ES modules + import maps don't work from `file://`), and it needs internet to load Three.js and Astronomy Engine from a CDN:
 
 ```bash
@@ -53,3 +59,7 @@ The one thing that can't be real is **scale** — true Sun/Earth/Moon distances 
 ## Stack
 
 Three.js r160 + OrbitControls and [astronomy-engine](https://www.npmjs.com/package/astronomy-engine) 2.1.19, both via CDN import map; the Earth texture is NASA's Blue Marble served from `three-globe` on unpkg. Vanilla JS/Canvas for the UI, phase disc, and sky dome. No install, no bundler. Change the observer by editing the `OBS` constant near the top of the script.
+
+## Licence
+
+Code is [MIT](LICENSE). The libraries and the Earth texture it loads at runtime are not mine to relicense — Three.js (MIT), astronomy-engine (MIT), and NASA's Blue Marble imagery (public domain, served via `three-globe`).
